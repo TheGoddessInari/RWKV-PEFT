@@ -93,6 +93,7 @@ def get_args():
             "CharLevelTokenizer",
             "TiktokenTokenizer",
             "RWKVTokenizer",
+            "PyRWKVTokenizer",
         ],
         help="What type of tokenizer to use.",
     )
@@ -239,7 +240,7 @@ def main():
         builders[key].finalize(output_idx_files[key])
 
     print("data_nums:", data_nums)
-    
+
 
 if __name__ == "__main__":
     main()

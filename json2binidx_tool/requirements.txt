@@ -4,3 +4,4 @@ lm-dataformat
 numpy
 tokenizers
 tqdm
+pyrwkv-tokenizer

@@ -22,6 +22,8 @@ from abc import abstractmethod
 
 from tokenizers import Tokenizer
 from rwkv_tokenizer import RWKV_TOKENIZER, TRIE_TOKENIZER
+import pyrwkv_tokenizer  # The fast, Rust-based pip package
+import os                # For path manipulation
 
 from typing import List, Union
 
@@ -36,6 +38,8 @@ def build_tokenizer(args):
     if args.tokenizer_type.lower() == "HFTokenizer".lower():
         assert args.vocab_file is not None
         tokenizer = HFTokenizer(args.vocab_file)
+    elif args.tokenizer_type.lower() == "PyRWKVTokenizer".lower():
+        tokenizer = PyRWKVTokenizer(args.vocab_file)
     elif args.tokenizer_type.lower() == "RWKVTokenizer".lower():
         assert args.vocab_file is not None
         tokenizer = RWKVTokenizer(args.vocab_file)
@@ -202,4 +206,63 @@ class RWKVTokenizer(AbstractTokenizer):
 
     @property
     def eod(self):
+        return self.eod_id
+
+class PyRWKVTokenizer(AbstractTokenizer):
+    """
+    RWKV Worlds Tokenizer.
+    This class is now a wrapper for the fast 'pyrwkv-tokenizer' (Rust) package.
+    """
+
+    def __init__(self, vocab_file=None):
+        name = "WorldTokenizer"
+        super().__init__(name)
+
+        # print(f"--- [RWKVTokenizer] Loading fast pyrwkv-tokenizer from: {vocab_dir} ---")
+
+        # Instantiate the fast tokenizer from the pip package
+        # This requires 'rwkv_vocab_v20230424.txt' to be in that directory
+        try:
+            self.tokenizer = pyrwkv_tokenizer.RWKVTokenizer(name=name, vocab_filepath=vocab_file)
+        except Exception as e:
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print(f"Failed to load pyrwkv_tokenizer from file: {vocab_file}")
+            print("And ensure you have installed the package: pip install pyrwkv-tokenizer")
+            print(f"Error: {e}")
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            raise e
+
+        # Manually set the EOD token ID
+        self.eod_id = 0
+
+    @property
+    def vocab_size(self):
+        # pyrwkv-tokenizer doesn't expose .get_vocab_size()
+        # The World tokenizer vocab size is fixed at 65536
+        return 65536
+
+    @property
+    def vocab(self):
+        # This is not easily exposed by pyrwkv-tokenizer and not
+        # needed by preprocess_data.py.
+        raise NotImplementedError("pyrwkv-tokenizer does not expose .vocab")
+
+    @property
+    def inv_vocab(self):
+        # Pass the .decode method
+        return self.tokenizer.decode
+
+    def tokenize(self, text: str):
+        # Map the script's .tokenize() call to the library's .encode() method
+        return self.tokenizer.encode(text)
+
+    def tokenize_batch(self, text_batch: Union[List[str], str]):
+        return self.tokenizer.encode_batch(text_batch)
+
+    def detokenize(self, token_ids):
+        return self.tokenizer.decode(token_ids)
+
+    @property
+    def eod(self):
+        # preprocess_data.py needs this to append EOD tokens
         return self.eod_id
